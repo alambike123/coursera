@@ -1,5 +1,4 @@
-#Getting and Cleaning Data - Course Project
-##Version 1.0
+## Getting and Cleaning Data - Course Project
 ==================================================================
 Goals: 
 The objective of this project was to 'tidy' a data set relating to Human 
