@@ -1,0 +1,104 @@
+---
+title: "Exercise Classification via Cross-Validated Random Forest"
+output: html_document
+---
+
+##Executive Summary
+The goal of this exercise is to build a predictive model for the means with which an action was performed  (sitting-down, standing-up, standing, walking, and sitting) based on data collected from fitness trackers such as the Nike Fuelband, Jawbone UP, and Fitbit.
+
+Using cross-validated random forests, I am able to produce a fitted model with an estimated out of bag error of only .12%. This model correctly classifies 100% of the test set. Additionally, the fitted random forest is efficient in that it only uses 14 of the 160 features included in the test and training sets.
+
+```{r}
+library(caret)
+library(randomForest)
+# load training and testing data
+testing = read.csv('pml-testing.csv')
+training = read.csv('pml-training.csv')
+```
+
+
+##Exploratory Data Analysis and Preprocessing
+Exploratory analysis reveals that both the training and testing set contain a high number of features. Additionally, the testing set contains multiple features with no data points. These will need to be removed from both sets during preprocessing as predictions on the test set won't be able to utilize them as predictors. Additionally, I remove unevenly leveled factors (for convenience), as well as index and username variables.
+
+```{r}
+dim(training); dim(testing)
+# find columns with missing values
+sapply(testing, function(x) sum(is.na(x)))
+# find columns that are factors
+sapply(testing, class)
+
+# remove NAs
+testing = testing[,colSums(is.na(testing))!=nrow(testing)]
+# remove index, name, and factor variables (for ease)
+testing = testing[-c(1,2,5,6)]
+# set training features to match testing
+predictors = c(names(testing[-60]), 'classe')
+training = training[,which(names(training) %in% predictors)]
+```
+
+
+##Cross Validation Random Forest
+To estimate an out of bag error and avoid overfitting, I further partition the data for which there are values for classe (split training set) into training and validation sets. I fit a cross validated random forest to the former and use the in sample error rate per different number of bootstrapped features to guide my final feature selection.
+
+```{r}
+# reproducibility
+set.seed(123)
+# create training and validation partition
+inTrain = createDataPartition(training$classe,
+                              p=0.7, list=FALSE)
+train = training[inTrain,]
+validation = training[-inTrain,]
+```
+
+The large feaure set makes it tedious to parse out all feature interactions and their predictive contribution. Fortunately, the non-linear nature of random forests implicitly downplays variables that do not confer significant information gain. Additionally, rfcv (random forest cross validation) iteratively performs bootstrap resampling during both sample and feature selection, which satisfies the need for cross validation during preprocessing.
+
+```{r}
+# fit cross validated random forest
+modFitcv = rfcv(train[,-56], train$classe)
+
+# error rate
+modFitcv$error.cv
+```
+
+The above results show the error rate per number of model features; the lowest in sample error being produed by only 14 features at .095%. I fit a new random forest to determine the 14 highest Gini predictors to produce my final model.
+
+```{r}
+# fit random forest
+modFit = randomForest(classe~., data=train)
+
+# feature importance by Gini
+Gini = importance(modFit)
+Gini = rownames(Gini[order(Gini,decreasing=TRUE),,drop=FALSE][1:14,,drop=FALSE])
+
+# fit final model
+train14 = train[,Gini]
+modFitFinal = randomForest(train$classe~., data=train14)
+```
+
+
+##Prediction and Error
+The final 14-feature random forest model predicts on the validation set with an accuracy of 99.88%. Thus, our estimated out of bag error is .12%.
+
+```{r}
+pred = predict(modFitFinal, validation)
+table(pred, validation$classe)
+```
+
+
+##Submission Script
+The estimated out of bag error corresponds to the test set predictions, which yield a 100% accuracy rate.
+
+```{r}
+pred = predict(modFitFinal, testing)
+
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+answers = as.character(pred)
+pml_write_files(answers)
+```
