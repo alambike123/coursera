@@ -20,13 +20,15 @@ training = read.csv('pml-training.csv')
 ##Exploratory Data Analysis and Preprocessing
 Exploratory analysis reveals that both the training and testing set contain a high number of features. Additionally, the testing set contains multiple features with no data points. These will need to be removed from both sets during preprocessing as predictions on the test set won't be able to utilize them as predictors. Additionally, I remove unevenly leveled factors (for convenience), as well as index and username variables.
 
-```{r}
+```{r, results='hide'}
 dim(training); dim(testing)
 # find columns with missing values
 sapply(testing, function(x) sum(is.na(x)))
 # find columns that are factors
 sapply(testing, class)
+```
 
+```{r}
 # remove NAs
 testing = testing[,colSums(is.na(testing))!=nrow(testing)]
 # remove index, name, and factor variables (for ease)
